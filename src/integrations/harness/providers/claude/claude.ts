@@ -333,6 +333,18 @@ export async function rewindClaudeLastTurn(
     ? parseClaudeTurnBoundary(input.providerTurnId)
     : null;
   if (!boundary) throw new Error("Claude Code cannot rewind this message");
+  if (boundary.resumeAt) {
+    // A conversation bound to another folder or account would start fresh,
+    // so nothing would be rewound.
+    const resume = resumeByThread.get(input.sessionId);
+    if (
+      !resume ||
+      resume.cwd !== input.cwd ||
+      !sameProviderAccountId(resume.providerAccountId, input.providerAccountId)
+    ) {
+      throw new Error("Claude Code cannot rewind this message");
+    }
+  }
 
   await stopClaudeSession(input.sessionId);
   if (!boundary.resumeAt) {
@@ -823,6 +835,8 @@ function handleLine(sessionId: string, live: Live, line: string): void {
     }
     if (stringField(rec, "subtype") === "compact_boundary") {
       transcriptLeafByThread.delete(sessionId);
+      // Claude cannot resume at an entry from before the compaction.
+      live.onEvent({ type: "turns.sealed" });
     }
   }
 }

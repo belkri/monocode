@@ -2229,6 +2229,28 @@ describe("claude edit last message", () => {
     await finish(await send(), "p4", "a4");
 
     expect(turnBoundaries()).toEqual(["_p1"]);
+    expect(events).toContainEqual({ type: "turns.sealed" });
+  });
+
+  it("refuses to rewind a conversation it cannot resume", async () => {
+    await finish(await send(), "p1", "a1");
+    await finish(await send(), "p2", "a2");
+    const spawns = spawned.length;
+
+    await expect(
+      rewindClaudeLastTurn({
+        ...base,
+        cwd: "/elsewhere",
+        providerTurnId: "a1_p2",
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toThrow("Claude Code cannot rewind this message");
+    expect(spawned).toHaveLength(spawns);
+
+    // The conversation is left running as it was.
+    await finish(await send(), "p3", "a3");
+    expect(spawned).toHaveLength(spawns);
+    expect(turnBoundaries().at(-1)).toBe("a2_p3");
   });
 
   it("refuses to rewind a message without a boundary", async () => {
